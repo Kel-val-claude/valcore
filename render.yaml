@@ -1,0 +1,30 @@
+# ============================================
+#   VALCORE — RENDER DEPLOYMENT BLUEPRINT
+#
+#   Database: Using Neon (external) instead of
+#   Render's own Postgres, since Render only
+#   allows ONE free database per account and
+#   that slot is already used by Kel HQ.
+#
+#   After deploying this blueprint, manually add
+#   DATABASE_URL in Render Dashboard → valcore →
+#   Environment → paste your Neon connection string.
+# ============================================
+
+services:
+  - type: web
+    name: valcore
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app.main:app"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: RENDER
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # DATABASE_URL is NOT set here — add it manually
+      # in Render Dashboard after deploy, using your
+      # Neon connection string.

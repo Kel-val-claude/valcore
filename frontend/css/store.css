@@ -1,0 +1,229 @@
+/* ============================================
+   VALCORE — STOREFRONT CSS
+   frontend/css/store.css
+   Dark/gold theme, consistent with Kel HQ
+   ============================================ */
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0A0A0A;--surface:#111;--card:#141414;
+  --border:rgba(255,255,255,0.06);--border-gold:rgba(212,175,55,0.25);
+  --gold:#D4AF37;--gold-glow:rgba(212,175,55,0.2);--gold-soft:rgba(212,175,55,0.08);
+  --text:#F0F0F0;--muted:#777;--muted2:#444;
+  --green:#2ECC71;--yellow:#F1C40F;--red:#E74C3C
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:15px;line-height:1.6}
+
+.btn{display:inline-block;padding:0.65rem 1.4rem;border-radius:8px;font-weight:600;font-size:0.85rem;
+  text-decoration:none;cursor:pointer;border:1.5px solid transparent;transition:all 0.2s;font-family:'Inter',sans-serif}
+.btn-gold{background:var(--gold);color:#0A0A0A;border-color:var(--gold)}
+.btn-gold:hover{background:#c9a227;box-shadow:0 0 20px var(--gold-glow);transform:translateY(-1px)}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+
+/* ===== NAVBAR ===== */
+.navbar{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:1.5rem;
+  padding:0.9rem 5%;background:rgba(10,10,10,0.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.nav-menu-btn{background:none;border:none;color:var(--text);font-size:1.3rem;cursor:pointer}
+.nav-logo{font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:800;color:var(--gold);
+  text-decoration:none;letter-spacing:-0.01em;margin-left:auto;margin-right:auto}
+.nav-logo span{color:var(--text)}
+.nav-profile-img{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1.5px solid var(--gold);cursor:pointer}
+
+/* ===== MOBILE MENU DRAWER ===== */
+.menu-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:299}
+.menu-overlay.open{display:block}
+.menu-drawer{position:fixed;top:0;left:-280px;width:260px;height:100vh;background:var(--surface);
+  border-right:1px solid var(--border);z-index:300;transition:left 0.28s ease;padding:1.5rem 1.25rem;overflow-y:auto}
+.menu-drawer.open{left:0}
+.menu-drawer a{display:block;padding:0.7rem 0;color:var(--text);text-decoration:none;font-size:0.92rem;
+  border-bottom:1px solid var(--border)}
+.menu-drawer a:hover{color:var(--gold)}
+
+/* ===== SEARCH ===== */
+.search-section{padding:1.5rem 5% 0.5rem}
+.search-box{display:flex;align-items:center;gap:0.6rem;background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:0.8rem 1.1rem;max-width:600px;margin:0 auto}
+.search-box input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:0.9rem;font-family:'Inter',sans-serif}
+.search-box input::placeholder{color:var(--muted)}
+.search-icon{color:var(--muted);font-size:1rem}
+
+/* ===== HOT SECTION ===== */
+.hot-section{padding:2rem 5% 1rem}
+.hot-title{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:800;
+  background:linear-gradient(135deg,#D4AF37,#ff6b35);-webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;background-clip:text;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem}
+
+/* ===== PRODUCT GRID ===== */
+.product-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:0.85rem;padding:0 5%}
+.product-grid.wide{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+
+.product-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;
+  cursor:pointer;transition:all 0.22s ease;text-decoration:none;color:var(--text);display:block;position:relative}
+.product-card:hover{border-color:var(--border-gold);transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,0.4)}
+
+.product-badge{position:absolute;top:8px;left:8px;background:var(--gold);color:#0A0A0A;font-size:0.6rem;
+  font-weight:700;padding:0.2rem 0.55rem;border-radius:50px;z-index:1}
+.product-badge.promo{background:var(--red);color:#fff}
+
+.product-img{height:120px;background:linear-gradient(135deg,#1a1a1a,#222);display:flex;align-items:center;
+  justify-content:center;font-size:2.4rem;border-bottom:1px solid var(--border)}
+
+.product-info{padding:0.85rem}
+.product-cat{font-size:0.6rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;
+  color:var(--gold);margin-bottom:0.3rem;display:block}
+.product-name{font-size:0.85rem;font-weight:700;margin-bottom:0.35rem;line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.product-rating{display:flex;align-items:center;gap:0.3rem;font-size:0.7rem;color:var(--muted);margin-bottom:0.5rem}
+.product-rating .stars{color:var(--gold)}
+.product-price-row{display:flex;align-items:baseline;gap:0.4rem;flex-wrap:wrap}
+.product-price{font-size:0.95rem;font-weight:800;color:var(--gold)}
+.product-compare{font-size:0.72rem;color:var(--muted2);text-decoration:line-through}
+
+/* ===== COLLECTIONS SCROLL ===== */
+.collections-section{padding:1.5rem 0}
+.collections-header{display:flex;align-items:center;justify-content:space-between;padding:0 5%;margin-bottom:0.9rem}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:1.15rem;font-weight:700}
+.view-all-link{font-size:0.78rem;color:var(--gold);text-decoration:none}
+
+.collections-scroll{display:flex;gap:0.6rem;overflow-x:auto;padding:0 5% 0.5rem;scrollbar-width:none}
+.collections-scroll::-webkit-scrollbar{display:none}
+.collection-chip{flex-shrink:0;display:flex;align-items:center;gap:0.4rem;background:var(--card);
+  border:1px solid var(--border);border-radius:50px;padding:0.55rem 1.1rem;font-size:0.82rem;font-weight:600;
+  color:var(--text);text-decoration:none;white-space:nowrap;transition:all 0.2s}
+.collection-chip:hover,.collection-chip.active{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+
+.collection-tools{display:flex;justify-content:space-between;padding:0.5rem 5% 1rem}
+.tool-btn{background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--muted);
+  font-size:0.78rem;padding:0.5rem 1rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;
+  font-family:'Inter',sans-serif}
+.tool-btn:hover{color:var(--gold);border-color:var(--border-gold)}
+
+/* ===== SECTIONS WRAPPER ===== */
+section.store-section{padding:1.5rem 0}
+.store-section .section-title-row{display:flex;align-items:center;justify-content:space-between;padding:0 5%;margin-bottom:1rem}
+
+/* ===== APPOINTMENT CTA ===== */
+.appt-cta{margin:2rem 5%;background:linear-gradient(135deg,#1a1500,#0A0A0A);border:1px solid var(--border-gold);
+  border-radius:18px;padding:2rem;text-align:center}
+.appt-cta h3{font-family:'Space Grotesk',sans-serif;font-size:1.2rem;margin-bottom:0.5rem}
+.appt-cta p{color:var(--muted);font-size:0.85rem;margin-bottom:1.25rem}
+
+/* ===== PRODUCT PAGE ===== */
+.product-page{max-width:1000px;margin:0 auto;padding:1.5rem 5%}
+.pp-gallery{background:var(--card);border:1px solid var(--border);border-radius:16px;height:280px;
+  display:flex;align-items:center;justify-content:center;font-size:4rem;margin-bottom:1.5rem}
+.pp-meta{display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap}
+.pp-cat{font-size:0.68rem;font-weight:700;text-transform:uppercase;color:var(--gold);background:var(--gold-soft);
+  padding:0.2rem 0.6rem;border-radius:4px}
+.pp-views{font-size:0.75rem;color:var(--muted)}
+.pp-name{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:800;margin-bottom:0.6rem}
+.pp-rating-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:1.25rem;font-size:0.85rem}
+.pp-rating-row .stars{color:var(--gold)}
+.pp-price-block{display:flex;align-items:baseline;gap:0.75rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.pp-price{font-size:2rem;font-weight:800;color:var(--gold)}
+.pp-compare{font-size:1.1rem;color:var(--muted2);text-decoration:line-through}
+.pp-promo-badge{background:var(--red);color:#fff;font-size:0.72rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:50px}
+.pp-desc{color:var(--muted);line-height:1.85;margin-bottom:1.5rem;font-size:0.92rem}
+.pp-actions{display:flex;gap:0.85rem;margin-bottom:2rem;flex-wrap:wrap}
+.pp-wishlist-btn{background:var(--card);border:1px solid var(--border);border-radius:8px;width:46px;height:46px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;color:var(--muted)}
+.pp-wishlist-btn:hover{color:var(--red);border-color:rgba(231,76,60,0.3)}
+
+/* ===== EMPTY / LOADING STATES ===== */
+.empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:0.85rem;grid-column:1/-1}
+.loading-state{text-align:center;padding:2rem;color:var(--muted);font-size:0.82rem;grid-column:1/-1}
+
+/* ===== FOOTER ===== */
+.store-footer{background:var(--surface);border-top:1px solid var(--border);padding:2.5rem 5% 1.5rem;margin-top:2rem}
+.store-footer-inner{display:flex;justify-content:space-between;flex-wrap:wrap;gap:1.5rem;max-width:1100px;margin:0 auto}
+.store-footer p{color:var(--muted);font-size:0.78rem}
+.store-footer .gold{color:var(--gold)}
+
+/* ===== RESPONSIVE ===== */
+@media(min-width:700px){
+  .product-grid{grid-template-columns:repeat(4,1fr)}
+  .pp-gallery{height:380px}
+}
+@media(max-width:480px){
+  .product-grid{gap:0.6rem}
+  .product-info{padding:0.65rem}
+  .product-name{font-size:0.78rem}
+}
+
+/* ============================================
+   NAVBAR GOLDEN V AVATAR
+   ============================================ */
+.nav-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #0A0A0A;
+  font-weight: 800;
+  font-size: 1rem;
+  font-family: 'Space Grotesk', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  flex-shrink: 0;
+  border: 2px solid rgba(212,175,55,0.4);
+  transition: all 0.2s;
+}
+.nav-avatar:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+
+/* ============================================
+   NAVBAR LOGO IMAGE + MENU USER CARD
+   ============================================ */
+
+.nav-logo-img-wrap {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+.nav-logo-img {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+
+.menu-user-card {
+  display: flex !important;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.85rem 1rem !important;
+  background: var(--gold-soft) !important;
+  border: 1px solid var(--border-gold) !important;
+  border-radius: 12px !important;
+  text-decoration: none;
+  color: var(--text) !important;
+}
+.menu-user-card:hover {
+  background: rgba(212,175,55,0.15) !important;
+}
+.menu-user-v {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #0A0A0A;
+  font-weight: 800;
+  font-size: 1rem;
+  font-family: 'Space Grotesk', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.menu-username {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
