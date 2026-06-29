@@ -26,14 +26,10 @@ NAVBAR = '''
   </a>
 
   <!-- Right Side Slot: Brand Profile Avatar -->
-  {% if session_user %}
-  <a href="/valcore" class="nav-avatar" title="VALCORE Profile">
-    <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" style="width:100%; height:100%; border-radius:inherit; object-fit:cover;"/>
-    <span class="nav-logo-fallback" style="display:none">V</span>
+  <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+    <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+    <span class="nav-logo-fallback">V</span>
   </a>
-  {% else %}
-  <a href="/login" class="btn btn-gold" style="font-size:0.78rem;padding:0.45rem 1rem">Sign In</a>
-  {% endif %}
 </nav>
 
 <div class="menu-overlay" id="menuOverlay"></div>
@@ -97,6 +93,30 @@ HOME_PAGE = '''
   </div>
 </div>
 
+
+<section class="deals-section" id="dealsSection" style="display:none">
+  <div class="hot-title" style="font-size:1.3rem;padding:1.5rem 5% 0.5rem">&#128176; Deals</div>
+  <div class="product-grid" id="dealsGrid">
+    {% for p in deals %}
+    <a href="/product/{{ p.slug }}" class="product-card">
+      <div class="product-badge promo">-{{ p.promo_percent }}%</div>
+      <div class="product-img">&#128230;</div>
+      <div class="product-info">
+        <span class="product-cat">{{ p.collection_name or 'Product' }}</span>
+        <div class="product-name">{{ p.name }}</div>
+        <div class="product-rating"><span class="stars">&#9733;</span> {{ "%.1f"|format(p.rating_avg or 0) }}</div>
+        <div class="product-price-row">
+          <span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span>
+          <span class="product-compare">&#8358;{{ "{:,}".format(p.price) }}</span>
+        </div>
+        <button class="btn btn-gold" style="width:100%;margin-top:0.5rem;font-size:0.78rem;padding:0.45rem 0"
+          onclick="event.preventDefault();addToCart({{ p.id }}, '{{ p.name }}', {{ p.display_price }}, this)">+ Add to Cart</button>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
 <section class="hot-section">
   <div class="hot-title">&#128293; HOT</div>
   <div class="product-grid">
@@ -112,6 +132,8 @@ HOME_PAGE = '''
           <span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span>
           {% if p.promo_percent and p.promo_percent > 0 %}<span class="product-compare">&#8358;{{ "{:,}".format(p.price) }}</span>{% endif %}
         </div>
+        <button class="btn btn-gold" style="width:100%;margin-top:0.5rem;font-size:0.78rem;padding:0.45rem 0"
+          onclick="event.preventDefault();addToCart({{ p.id }}, '{{ p.name }}', {{ p.display_price }}, this)">+ Add to Cart</button>
       </div>
     </a>
     {% else %}
@@ -195,6 +217,15 @@ HOME_PAGE = '''
   </div>
 </section>
 
+
+<section class="store-section" id="recentlyViewedSection" style="display:none;padding-top:0">
+  <div class="section-title-row">
+    <span class="section-title">&#128336; Recently Viewed</span>
+    <button onclick="clearRecentlyViewed()" style="background:none;border:none;color:var(--muted);font-size:0.75rem;cursor:pointer">Clear</button>
+  </div>
+  <div class="product-grid wide" id="recentlyViewedGrid"></div>
+</section>
+
 <div class="appt-cta">
   <h3>Products not to your liking?</h3>
   <p>Book an appointment now and create YOUR OWN. &#127801;</p>
@@ -238,6 +269,20 @@ def home():
         base_query + " ORDER BY p.id DESC LIMIT 20"
     ).fetchall()
 
+    deals_rows = db.execute(
+        base_query + " AND p.promo_percent > 0 ORDER BY p.promo_percent DESC LIMIT 8"
+    ).fetchall()
+
+    # Fetch active announcements with product slug if linked
+    announcements = db.execute("""
+        SELECT a.*, p.slug as product_slug
+        FROM announcements a
+        LEFT JOIN products p ON p.id = a.product_id
+        WHERE a.active = 1
+        ORDER BY a.sort_order ASC, a.id DESC
+        LIMIT 10
+    """).fetchall()
+
     db.close()
 
     def with_display_price(rows):
@@ -259,6 +304,8 @@ def home():
         recommended=with_display_price(recommended_rows),
         new_releases=with_display_price(new_rows),
         all_products=with_display_price(all_rows),
+        deals=with_display_price(deals_rows),
+        announcements=announcements,
     )
 
 
@@ -300,6 +347,8 @@ PRODUCT_PAGE = '''
 
   <div class="pp-actions">
     <button onclick="startCheckout({{ product.id }})" class="btn btn-gold" style="flex:1;text-align:center;border:none;cursor:pointer" id="purchaseBtn">Purchase &rarr;</button>
+    <button class="btn btn-outline" style="flex:1;text-align:center;border:none;cursor:pointer"
+      onclick="addToCart({{ product.id }}, '{{ product.name }}', {{ display_price }}, this)">+ Add to Cart</button>
     <button class="pp-wishlist-btn" onclick="toggleWishlist({{ product.id }}, this)">&#9825;</button>
     {% if session_admin %}
     <a href="/admin#products" class="btn btn-outline">&#9998; Edit</a>

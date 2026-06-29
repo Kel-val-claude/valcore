@@ -227,3 +227,171 @@ section.store-section{padding:1.5rem 0}
   font-weight: 600;
   color: var(--text);
 }
+
+
+/* ============================================
+   ANNOUNCEMENTS — info strip + ad banner
+   ============================================ */
+.announcement-strip {
+  background: var(--gold, #D4AF37);
+  color: #0A0A0A;
+  text-align: center;
+  padding: 0.45rem 5%;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.announcement-strip .ann-body {
+  font-weight: 400;
+  opacity: 0.8;
+  margin-left: 0.25rem;
+}
+
+.announcement-ad {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(135deg, #1A1A2E, #16213E);
+  border-bottom: 1px solid rgba(212,175,55,0.15);
+  padding: 0.75rem 5%;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.announcement-ad:hover { background: linear-gradient(135deg, #1E1E38, #1A2540); }
+.ann-ad-img {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.ann-ad-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.ann-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #F0F0F0;
+}
+.ann-body {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.55);
+}
+.ann-ad-arrow {
+  color: var(--gold, #D4AF37);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   NAV — VALCORE LOGO (replaces V icon)
+   ============================================ */
+.nav-valcore-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1.5px solid rgba(212,175,55,0.25);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: border-color 0.2s;
+}
+.nav-valcore-logo:hover { border-color: var(--gold, #D4AF37); }
+.nav-valcore-logo .nav-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.nav-valcore-logo .nav-logo-fallback {
+  display: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gold, #D4AF37);
+  color: #0A0A0A;
+  font-weight: 800;
+  font-size: 0.9rem;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================
+   DEALS SECTION
+   ============================================ */
+.deals-section {
+  padding: 0 5% 1.5rem;
+}
+.deals-section .product-badge.promo {
+  background: #E74C3C;
+  color: #fff;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  z-index: 2;
+}
+.product-compare {
+  font-size: 0.72rem;
+  color: var(--muted, #666);
+  text-decoration: line-through;
+  margin-left: 0.3rem;
+}
+
+/* ============================================
+   RECENTLY VIEWED SECTION
+   ============================================ */
+#recentlyViewedSection { padding-bottom: 2rem; }
+.product-grid.wide { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+
+/* ============================================
+   ADD TO CART — button feedback states
+   ============================================ */
+.btn-adding {
+  opacity: 0.7;
+  pointer-events: none;
+}
+.btn-added {
+  background: #27AE60 !important;
+  border-color: #27AE60 !important;
+}
+
+/* ============================================
+   ADMIN — badge utilities
+   ============================================ */
+.badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.badge-gold { background: rgba(212,175,55,0.15); color: #D4AF37; border: 1px solid rgba(212,175,55,0.3); }
+.badge-green { background: rgba(39,174,96,0.12); color: #27AE60; border: 1px solid rgba(39,174,96,0.25); }
+.badge-muted { background: rgba(255,255,255,0.06); color: #888; border: 1px solid rgba(255,255,255,0.1); }
+
+/* Product page — actions row */
+.pp-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.pp-actions .btn { flex: 1; min-width: 120px; }
+
+/* ============================================
+   RESPONSIVE 480px — announcements + nav
+   ============================================ */
+@media (max-width: 480px) {
+  .announcement-ad { padding: 0.6rem 4%; gap: 0.6rem; }
+  .ann-ad-img { width: 40px; height: 40px; }
+  .ann-title { font-size: 0.78rem; }
+  .ann-body { font-size: 0.68rem; }
+}
