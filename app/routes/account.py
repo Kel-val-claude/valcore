@@ -166,9 +166,38 @@ ACCOUNT_PAGE = '''
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="nav-logo">VALCORE <span>&lt;/&gt;</span></a>
-    <a href="/account" class="nav-avatar">V</a>
+    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
+    <a href="/" class="nav-logo-img-wrap">
+      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
+    </a>
+    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
+      <span class="nav-logo-fallback">V</span>
+    </a>
   </nav>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <a href="/">&#127968; Home</a>
+    <a href="/search">&#128269; Search</a>
+    <a href="/valcore">&#9889; VALCORE Profile</a>
+    <a href="/appointment">&#128197; Book Appointment</a>
+    <a href="/account/downloads">&#128230; My Purchases</a>
+    <a href="/account/wishlist">&#9825; Wishlist</a>
+    <a href="/account/support">&#128172; Support Tickets</a>
+    <a href="/account/settings">&#9881; Settings</a>
+    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
+  </div>
+  <script>
+  document.addEventListener(\'DOMContentLoaded\', function(){
+    var btn=document.getElementById(\'menuBtn\');
+    var drawer=document.getElementById(\'menuDrawer\');
+    var overlay=document.getElementById(\'menuOverlay\');
+    if(btn&&drawer&&overlay){
+      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
+      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
+    }
+  });
+  </script>
 
   <div class="profile-wrap">
 
@@ -230,12 +259,17 @@ ACCOUNT_PAGE = '''
       </div>
       {% if cart_items %}
         {% for item in cart_items %}
-        <div style="display:flex;justify-content:space-between;padding:0.6rem 0;border-bottom:1px solid var(--border);font-size:0.82rem">
-          <span>{{ item.name }}</span>
-          <span style="color:var(--gold)">&#8358;{{ "{:,}".format(item.price) }}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--border);font-size:0.82rem" id="cart-row-{{ item.product_id }}">
+          <a href="/product/{{ item.slug }}" style="color:inherit;text-decoration:none;flex:1">{{ item.name }}</a>
+          <span style="color:var(--gold);margin-right:0.75rem">&#8358;{{ "{:,}".format(item.price) }}</span>
+          <button onclick="removeCartItem({{ item.product_id }})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1" title="Remove">&#10005;</button>
         </div>
         {% endfor %}
-        <a href="/" class="btn btn-gold" style="width:100%;text-align:center;display:block;margin-top:1rem">Checkout</a>
+        <div style="display:flex;justify-content:space-between;padding:0.75rem 0 0;font-size:0.85rem;font-weight:700">
+          <span>Total</span>
+          <span style="color:var(--gold)">&#8358;{{ "{:,}".format(cart_items|sum(attribute='price')) }}</span>
+        </div>
+        <button onclick="startCartCheckout()" class="btn btn-gold" style="width:100%;text-align:center;display:block;margin-top:1rem;border:none;cursor:pointer" id="cartCheckoutBtn">Checkout &rarr;</button>
       {% else %}
         <div class="acct-cart-empty">
           Cart is empty. <a href="/" style="color:var(--gold)">Browse products</a>
@@ -257,6 +291,47 @@ ACCOUNT_PAGE = '''
       menu.classList.remove('open');
     }
   });
+
+  function removeCartItem(productId) {
+    fetch('/account/cart/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        var row = document.getElementById('cart-row-' + productId);
+        if (row) row.remove();
+        if (data.cart_count === 0) location.reload();
+      }
+    });
+  }
+
+  function startCartCheckout() {
+    var btn = document.getElementById('cartCheckoutBtn');
+    if (!btn) return;
+    var original = btn.textContent;
+    btn.textContent = 'Loading...';
+    btn.style.pointerEvents = 'none';
+
+    fetch('/checkout/start-cart', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.authorization_url) {
+          window.location.href = data.authorization_url;
+        } else {
+          alert(data.error || 'Could not start checkout. Please try again.');
+          btn.textContent = original;
+          btn.style.pointerEvents = '';
+        }
+      })
+      .catch(() => {
+        alert('Network error. Please try again.');
+        btn.textContent = original;
+        btn.style.pointerEvents = '';
+      });
+  }
   </script>
 </body>
 </html>
@@ -281,6 +356,26 @@ def dashboard():
         'SELECT COUNT(*) as c FROM support_tickets WHERE user_id=?', (user_id,)
     ).fetchone()['c']
 
+    cart_rows = db.execute('''
+        SELECT ci.product_id, p.name, p.price, p.promo_percent, p.slug
+        FROM cart_items ci
+        JOIN products p ON p.id = ci.product_id
+        WHERE ci.user_id=? AND p.deleted_at IS NULL
+        ORDER BY ci.added_at DESC
+    ''', (user_id,)).fetchall()
+
+    cart_items = []
+    for r in cart_rows:
+        price = r['price'] or 0
+        promo = r['promo_percent'] or 0
+        final_price = round(price - (price * promo / 100)) if promo > 0 else price
+        cart_items.append({
+            'product_id': r['product_id'],
+            'name': r['name'],
+            'price': final_price,
+            'slug': r['slug'],
+        })
+
     db.close()
 
     return render_template_string(
@@ -289,9 +384,83 @@ def dashboard():
         purchase_count=purchase_count,
         wishlist_count=wishlist_count,
         ticket_count=ticket_count,
-        cart_items=[],   # Cart phase — empty for now, session-based cart comes later
-        cart_count=0,
+        cart_items=cart_items,
+        cart_count=len(cart_items),
     )
+
+
+@account_bp.route('/cart/add', methods=['POST'])
+@login_required
+def cart_add():
+    data = request.get_json() or {}
+    product_id = data.get('product_id')
+    user_id = session['user_id']
+
+    if not product_id:
+        return jsonify({'ok': False, 'error': 'No product specified.'}), 400
+
+    db = get_db()
+    product = db.execute(
+        "SELECT id FROM products WHERE id=? AND status='live' AND deleted_at IS NULL",
+        (product_id,)
+    ).fetchone()
+
+    if not product:
+        db.close()
+        return jsonify({'ok': False, 'error': 'Product not found or unavailable.'}), 404
+
+    already = db.execute(
+        'SELECT id FROM cart_items WHERE user_id=? AND product_id=?',
+        (user_id, product_id)
+    ).fetchone()
+
+    if not already:
+        db.execute(
+            'INSERT INTO cart_items (user_id, product_id) VALUES (?,?)',
+            (user_id, product_id)
+        )
+        db.commit()
+
+    cart_count = db.execute(
+        'SELECT COUNT(*) as c FROM cart_items WHERE user_id=?', (user_id,)
+    ).fetchone()['c']
+
+    db.close()
+    return jsonify({'ok': True, 'cart_count': cart_count, 'already_in_cart': bool(already)})
+
+
+@account_bp.route('/cart/remove', methods=['POST'])
+@login_required
+def cart_remove():
+    data = request.get_json() or {}
+    product_id = data.get('product_id')
+    user_id = session['user_id']
+
+    db = get_db()
+    db.execute(
+        'DELETE FROM cart_items WHERE user_id=? AND product_id=?',
+        (user_id, product_id)
+    )
+    db.commit()
+
+    cart_count = db.execute(
+        'SELECT COUNT(*) as c FROM cart_items WHERE user_id=?', (user_id,)
+    ).fetchone()['c']
+
+    db.close()
+    return jsonify({'ok': True, 'cart_count': cart_count})
+
+
+@account_bp.route('/cart/count')
+@login_required
+def cart_count_endpoint():
+    user_id = session['user_id']
+    db = get_db()
+    cart_count = db.execute(
+        'SELECT COUNT(*) as c FROM cart_items WHERE user_id=?', (user_id,)
+    ).fetchone()['c']
+    db.close()
+    return jsonify({'ok': True, 'cart_count': cart_count})
 
 
 @account_bp.route('/wishlist/toggle', methods=['POST'])
@@ -333,9 +502,38 @@ WISHLIST_PAGE = '''
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="nav-logo">VALCORE <span>&lt;/&gt;</span></a>
-    <a href="/account" class="btn btn-outline" style="font-size:0.78rem;padding:0.45rem 1rem">My Account</a>
+    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
+    <a href="/" class="nav-logo-img-wrap">
+      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
+    </a>
+    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
+      <span class="nav-logo-fallback">V</span>
+    </a>
   </nav>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <a href="/">&#127968; Home</a>
+    <a href="/search">&#128269; Search</a>
+    <a href="/valcore">&#9889; VALCORE Profile</a>
+    <a href="/appointment">&#128197; Book Appointment</a>
+    <a href="/account/downloads">&#128230; My Purchases</a>
+    <a href="/account/wishlist">&#9825; Wishlist</a>
+    <a href="/account/support">&#128172; Support Tickets</a>
+    <a href="/account/settings">&#9881; Settings</a>
+    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
+  </div>
+  <script>
+  document.addEventListener(\'DOMContentLoaded\', function(){
+    var btn=document.getElementById(\'menuBtn\');
+    var drawer=document.getElementById(\'menuDrawer\');
+    var overlay=document.getElementById(\'menuOverlay\');
+    if(btn&&drawer&&overlay){
+      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
+      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
+    }
+  });
+  </script>
 
   <section class="store-section">
     <div class="section-title-row">
@@ -393,9 +591,38 @@ SUPPORT_LIST_PAGE = '''
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="nav-logo">VALCORE <span>&lt;/&gt;</span></a>
-    <a href="/account" class="btn btn-outline" style="font-size:0.78rem;padding:0.45rem 1rem">My Account</a>
+    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
+    <a href="/" class="nav-logo-img-wrap">
+      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
+    </a>
+    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
+      <span class="nav-logo-fallback">V</span>
+    </a>
   </nav>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <a href="/">&#127968; Home</a>
+    <a href="/search">&#128269; Search</a>
+    <a href="/valcore">&#9889; VALCORE Profile</a>
+    <a href="/appointment">&#128197; Book Appointment</a>
+    <a href="/account/downloads">&#128230; My Purchases</a>
+    <a href="/account/wishlist">&#9825; Wishlist</a>
+    <a href="/account/support">&#128172; Support Tickets</a>
+    <a href="/account/settings">&#9881; Settings</a>
+    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
+  </div>
+  <script>
+  document.addEventListener(\'DOMContentLoaded\', function(){
+    var btn=document.getElementById(\'menuBtn\');
+    var drawer=document.getElementById(\'menuDrawer\');
+    var overlay=document.getElementById(\'menuOverlay\');
+    if(btn&&drawer&&overlay){
+      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
+      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
+    }
+  });
+  </script>
 
   <section class="store-section">
     <div class="section-title-row">
@@ -448,9 +675,38 @@ SUPPORT_NEW_PAGE = '''
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="nav-logo">VALCORE <span>&lt;/&gt;</span></a>
-    <a href="/account/support" class="btn btn-outline" style="font-size:0.78rem;padding:0.45rem 1rem">All Tickets</a>
+    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
+    <a href="/" class="nav-logo-img-wrap">
+      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
+    </a>
+    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
+      <span class="nav-logo-fallback">V</span>
+    </a>
   </nav>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <a href="/">&#127968; Home</a>
+    <a href="/search">&#128269; Search</a>
+    <a href="/valcore">&#9889; VALCORE Profile</a>
+    <a href="/appointment">&#128197; Book Appointment</a>
+    <a href="/account/downloads">&#128230; My Purchases</a>
+    <a href="/account/wishlist">&#9825; Wishlist</a>
+    <a href="/account/support">&#128172; Support Tickets</a>
+    <a href="/account/settings">&#9881; Settings</a>
+    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
+  </div>
+  <script>
+  document.addEventListener(\'DOMContentLoaded\', function(){
+    var btn=document.getElementById(\'menuBtn\');
+    var drawer=document.getElementById(\'menuDrawer\');
+    var overlay=document.getElementById(\'menuOverlay\');
+    if(btn&&drawer&&overlay){
+      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
+      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
+    }
+  });
+  </script>
 
   <div class="product-page" style="max-width:520px">
     <h1 class="pp-name">New Support Ticket</h1>
@@ -551,9 +807,38 @@ SUPPORT_DETAIL_PAGE = '''
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="nav-logo">VALCORE <span>&lt;/&gt;</span></a>
-    <a href="/account/support" class="btn btn-outline" style="font-size:0.78rem;padding:0.45rem 1rem">All Tickets</a>
+    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
+    <a href="/" class="nav-logo-img-wrap">
+      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
+    </a>
+    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
+      <span class="nav-logo-fallback">V</span>
+    </a>
   </nav>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <a href="/">&#127968; Home</a>
+    <a href="/search">&#128269; Search</a>
+    <a href="/valcore">&#9889; VALCORE Profile</a>
+    <a href="/appointment">&#128197; Book Appointment</a>
+    <a href="/account/downloads">&#128230; My Purchases</a>
+    <a href="/account/wishlist">&#9825; Wishlist</a>
+    <a href="/account/support">&#128172; Support Tickets</a>
+    <a href="/account/settings">&#9881; Settings</a>
+    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
+  </div>
+  <script>
+  document.addEventListener(\'DOMContentLoaded\', function(){
+    var btn=document.getElementById(\'menuBtn\');
+    var drawer=document.getElementById(\'menuDrawer\');
+    var overlay=document.getElementById(\'menuOverlay\');
+    if(btn&&drawer&&overlay){
+      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
+      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
+    }
+  });
+  </script>
 
   <div class="product-page" style="max-width:600px">
     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">
@@ -613,9 +898,38 @@ SETTINGS_PAGE = '''
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="nav-logo">VALCORE <span>&lt;/&gt;</span></a>
-    <a href="/account" class="nav-avatar">V</a>
+    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
+    <a href="/" class="nav-logo-img-wrap">
+      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
+    </a>
+    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
+      <span class="nav-logo-fallback">V</span>
+    </a>
   </nav>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <a href="/">&#127968; Home</a>
+    <a href="/search">&#128269; Search</a>
+    <a href="/valcore">&#9889; VALCORE Profile</a>
+    <a href="/appointment">&#128197; Book Appointment</a>
+    <a href="/account/downloads">&#128230; My Purchases</a>
+    <a href="/account/wishlist">&#9825; Wishlist</a>
+    <a href="/account/support">&#128172; Support Tickets</a>
+    <a href="/account/settings">&#9881; Settings</a>
+    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
+  </div>
+  <script>
+  document.addEventListener(\'DOMContentLoaded\', function(){
+    var btn=document.getElementById(\'menuBtn\');
+    var drawer=document.getElementById(\'menuDrawer\');
+    var overlay=document.getElementById(\'menuOverlay\');
+    if(btn&&drawer&&overlay){
+      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
+      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
+    }
+  });
+  </script>
 
   <div style="max-width:480px;margin:0 auto;padding:1.5rem 5%">
     <h2 style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;margin-bottom:1.25rem">&#9881;&#65039; Settings</h2>
@@ -669,9 +983,38 @@ MY_REVIEWS_PAGE = '''
 </head>
 <body>
   <nav class="navbar">
-    <a href="/" class="nav-logo">VALCORE <span>&lt;/&gt;</span></a>
-    <a href="/account" class="nav-avatar">V</a>
+    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
+    <a href="/" class="nav-logo-img-wrap">
+      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
+    </a>
+    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
+      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
+      <span class="nav-logo-fallback">V</span>
+    </a>
   </nav>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <a href="/">&#127968; Home</a>
+    <a href="/search">&#128269; Search</a>
+    <a href="/valcore">&#9889; VALCORE Profile</a>
+    <a href="/appointment">&#128197; Book Appointment</a>
+    <a href="/account/downloads">&#128230; My Purchases</a>
+    <a href="/account/wishlist">&#9825; Wishlist</a>
+    <a href="/account/support">&#128172; Support Tickets</a>
+    <a href="/account/settings">&#9881; Settings</a>
+    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
+  </div>
+  <script>
+  document.addEventListener(\'DOMContentLoaded\', function(){
+    var btn=document.getElementById(\'menuBtn\');
+    var drawer=document.getElementById(\'menuDrawer\');
+    var overlay=document.getElementById(\'menuOverlay\');
+    if(btn&&drawer&&overlay){
+      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
+      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
+    }
+  });
+  </script>
 
   <section class="store-section">
     <div class="section-title-row">

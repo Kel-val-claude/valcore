@@ -40,6 +40,7 @@ NAVBAR = '''
   <a href="/appointment">&#128197; Book Appointment</a>
   {% if session_user %}
   <a href="/account/downloads">&#128230; My Purchases</a>
+  <a href="/account" class="menu-cart-link">&#128722; Cart <span class="cart-badge" data-cart-count style="display:none">0</span></a>
   <a href="/account/wishlist">&#9825; Wishlist</a>
   <a href="/account/support">&#128172; Support Tickets</a>
   <a href="/account/settings">&#9881; Settings</a>
@@ -71,7 +72,8 @@ HEAD = '''
 <link rel="stylesheet" href="/css/store.css"/>
 '''
 
-SCRIPT_TAG = '<script src="/js/store.js"></script>'
+SCRIPT_TAG = '''<script src="/js/store.js"></script>'''
+
 
 
 # ============================================
@@ -109,13 +111,19 @@ HOME_PAGE = '''
           <span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span>
           <span class="product-compare">&#8358;{{ "{:,}".format(p.price) }}</span>
         </div>
-        <button class="btn btn-gold" style="width:100%;margin-top:0.5rem;font-size:0.78rem;padding:0.45rem 0"
-          onclick="event.preventDefault();addToCart({{ p.id }}, '{{ p.name }}', {{ p.display_price }}, this)">+ Add to Cart</button>
-      </div>
-    </a>
+        <div class="card-action-row" style="display:flex;gap:0.4rem;margin-top:0.5rem">
+          <a href="/product/{{ p.slug }}" class="btn btn-gold" style="flex:1;font-size:0.78rem;padding:0.45rem 0;text-align:center;display:block"
+            onclick="event.stopPropagation()">Buy Now &rarr;</a>
+          <button class="btn btn-outline cart-add-btn" style="flex:0 0 38px;padding:0.45rem 0;font-size:0.85rem"
+            onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, this)" title="Add to Cart">&#128722;</button>
+        </div>
+        </div>
+        </a>
+    {% else %}
+    <div class="empty-state">No deals live yet.</div>
     {% endfor %}
-  </div>
-</section>
+    </div>
+  </section>
 
 <section class="hot-section">
   <div class="hot-title">&#128293; HOT</div>
@@ -132,8 +140,12 @@ HOME_PAGE = '''
           <span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span>
           {% if p.promo_percent and p.promo_percent > 0 %}<span class="product-compare">&#8358;{{ "{:,}".format(p.price) }}</span>{% endif %}
         </div>
-        <button class="btn btn-gold" style="width:100%;margin-top:0.5rem;font-size:0.78rem;padding:0.45rem 0"
-          onclick="event.preventDefault();addToCart({{ p.id }}, '{{ p.name }}', {{ p.display_price }}, this)">+ Add to Cart</button>
+        <div class="card-action-row" style="display:flex;gap:0.4rem;margin-top:0.5rem">
+          <a href="/product/{{ p.slug }}" class="btn btn-gold" style="flex:1;font-size:0.78rem;padding:0.45rem 0;text-align:center;display:block"
+            onclick="event.stopPropagation()">Buy Now &rarr;</a>
+          <button class="btn btn-outline cart-add-btn" style="flex:0 0 38px;padding:0.45rem 0;font-size:0.85rem"
+            onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, this)" title="Add to Cart">&#128722;</button>
+        </div>
       </div>
     </a>
     {% else %}
@@ -347,8 +359,7 @@ PRODUCT_PAGE = '''
 
   <div class="pp-actions">
     <button onclick="startCheckout({{ product.id }})" class="btn btn-gold" style="flex:1;text-align:center;border:none;cursor:pointer" id="purchaseBtn">Purchase &rarr;</button>
-    <button class="btn btn-outline" style="flex:1;text-align:center;border:none;cursor:pointer"
-      onclick="addToCart({{ product.id }}, '{{ product.name }}', {{ display_price }}, this)">+ Add to Cart</button>
+    <button onclick="addToCart({{ product.id }}, this)" class="btn btn-outline" style="flex:1;text-align:center;border:1.5px solid var(--gold);cursor:pointer" id="addToCartBtn">&#128722; Add to Cart</button>
     <button class="pp-wishlist-btn" onclick="toggleWishlist({{ product.id }}, this)">&#9825;</button>
     {% if session_admin %}
     <a href="/admin#products" class="btn btn-outline">&#9998; Edit</a>

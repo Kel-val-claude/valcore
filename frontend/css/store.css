@@ -395,3 +395,35 @@ section.store-section{padding:1.5rem 0}
   .ann-title { font-size: 0.78rem; }
   .ann-body { font-size: 0.68rem; }
 }
+
+/* Purchase button pulse — highlights when Buy Now clicked on non-product page */
+@keyframes btn-pulse-anim {
+  0%,100% { box-shadow: 0 0 0 0 rgba(212,175,55,0.4); }
+  50%      { box-shadow: 0 0 0 10px rgba(212,175,55,0); }
+}
+.btn-pulse {
+  animation: btn-pulse-anim 0.6s ease 2;
+}
+
+/* ============================================
+   CART BADGE — drawer link + nav indicators
+   ============================================ */
+.menu-cart-link {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cart-badge {
+  background: var(--gold, #D4AF37);
+  color: #0A0A0A;
+  font-size: 0.68rem;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}

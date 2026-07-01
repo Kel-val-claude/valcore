@@ -38,3 +38,14 @@ def make_payment_reference(user_id, product_id):
     """
     rand = secrets.token_hex(6)
     return f'VALC-{user_id}-{product_id}-{rand}'
+
+
+def make_cart_payment_reference(user_id):
+    """
+    Unique reference string for a multi-item cart checkout.
+    Format: VALC-{user_id}-CART-{random}
+    Multiple purchases rows share this single reference —
+    one Paystack transaction covers the whole cart.
+    """
+    rand = secrets.token_hex(6)
+    return f'VALC-{user_id}-CART-{rand}'

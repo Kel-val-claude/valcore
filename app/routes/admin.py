@@ -122,6 +122,7 @@ tr:last-child td{border-bottom:none}
     <button class="nav-item" data-section="support">&#128172; Support</button>
     <button class="nav-item" data-section="appointments">&#128197; Appointments</button>
     <button class="nav-item" data-section="questions">&#10067; Product Q&amp;A</button>
+    <button class="nav-item" data-section="announcements">&#128226; Announcements</button>
     <div class="nav-divider"></div>
     <button class="nav-item" data-section="settings">&#128279; Settings</button>
     <button class="nav-item" data-section="audit">&#128272; Audit Log</button>
@@ -323,6 +324,89 @@ tr:last-child td{border-bottom:none}
           <thead><tr><th>Product</th><th>Question</th><th>Answer</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="questionsBody"><tr><td colspan="5" style="color:var(--muted)">Loading...</td></tr></tbody>
         </table></div>
+      </div>
+    </div>
+
+    <div id="sec-announcements" class="section">
+      <div class="page-header">
+        <h1>&#128226; Announcements</h1>
+        <p>Manage info strips and ad banners shown on the storefront.</p>
+      </div>
+      <div style="margin-bottom:1rem">
+        <button class="btn btn-gold" onclick="openAnnModal()">+ New Announcement</button>
+      </div>
+      <div id="annList">
+        {% for a in announcements %}
+        <div class="panel" style="display:flex;align-items:center;gap:1rem;margin-bottom:0.6rem;padding:0.9rem 1.1rem">
+          <span style="font-size:0.7rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:4px;background:{% if a.category=='ad' %}rgba(212,175,55,0.15){% else %}rgba(255,255,255,0.06){% endif %};color:{% if a.category=='ad' %}#D4AF37{% else %}#888{% endif %}">
+            {{ a.category|upper }}
+          </span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.88rem">{{ a.title }}</div>
+            {% if a.body %}<div style="font-size:0.75rem;color:var(--muted)">{{ a.body }}</div>{% endif %}
+          </div>
+          <span style="font-size:0.72rem;color:{% if a.active %}var(--green){% else %}var(--muted){% endif %}">
+            {% if a.active %}● Active{% else %}○ Off{% endif %}
+          </span>
+          <button class="btn-icon" onclick="editAnn({{ a.id }}, '{{ a.category }}', {{ a.title|tojson }}, {{ (a.body or '')|tojson }}, {{ (a.image_url or '')|tojson }}, {{ (a.link_url or '')|tojson }}, {{ a.product_id or 'null' }}, {{ a.sort_order or 0 }}, {{ a.active }})">&#9998;</button>
+          <button class="btn-icon" style="color:var(--red)" onclick="deleteAnn({{ a.id }})">&#128465;</button>
+        </div>
+        {% else %}
+        <div class="empty-state">No announcements yet.</div>
+        {% endfor %}
+      </div>
+
+      <!-- Announcement Modal -->
+      <div id="annModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;align-items:center;justify-content:center">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.75rem;width:min(540px,94vw);max-height:90vh;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+            <h3 id="annModalTitle" style="font-size:1rem;font-weight:700">New Announcement</h3>
+            <button onclick="closeAnnModal()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer">&#10005;</button>
+          </div>
+          <input type="hidden" id="ann_id">
+          <div class="form-group">
+            <label>Category</label>
+            <select id="ann_cat" class="form-input" onchange="toggleAnnAdFields()">
+              <option value="regular">&#128226; Regular — info strip</option>
+              <option value="ad">&#127997; Ad — clickable banner</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Title *</label>
+            <input type="text" id="ann_title" class="form-input" placeholder="e.g. New template dropped!">
+          </div>
+          <div class="form-group">
+            <label>Body / Short writeup</label>
+            <textarea id="ann_body" class="form-input" rows="2" placeholder="Short description shown on the banner"></textarea>
+          </div>
+          <div id="annAdFields" style="display:none">
+            <div class="form-group">
+              <label>Image URL <span style="color:var(--muted);font-size:0.73rem">(banner image)</span></label>
+              <input type="url" id="ann_image" class="form-input" placeholder="https://...">
+            </div>
+            <div class="form-group">
+              <label>Link URL <span style="color:var(--muted);font-size:0.73rem">(where ad goes)</span></label>
+              <input type="url" id="ann_link" class="form-input" placeholder="https://...">
+            </div>
+            <div class="form-group">
+              <label>Connect to Product <span style="color:var(--muted);font-size:0.73rem">(tap ad → product page)</span></label>
+              <select id="ann_product" class="form-input">
+                <option value="">— No product link —</option>
+                {% for p in products %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="display:flex;align-items:center;gap:0.6rem">
+            <input type="checkbox" id="ann_active" checked style="width:auto">
+            <label for="ann_active" style="margin:0;cursor:pointer">Active (show on storefront)</label>
+          </div>
+          <div style="display:flex;gap:0.6rem;margin-top:1rem">
+            <button class="btn btn-gold" onclick="saveAnn()" style="flex:1">Save</button>
+            <button class="btn btn-outline" onclick="closeAnnModal()" style="flex:1">Cancel</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -847,6 +931,75 @@ function loadAnalytics() {
     }).join('') || '<tr><td colspan="4" style="color:var(--muted);padding:0.8rem">No sales data yet.</td></tr>';
   });
 }
+// ---- ANNOUNCEMENTS ----
+function openAnnModal() {
+  document.getElementById('annModalTitle').textContent = 'New Announcement';
+  document.getElementById('ann_id').value = '';
+  document.getElementById('ann_cat').value = 'regular';
+  document.getElementById('ann_title').value = '';
+  document.getElementById('ann_body').value = '';
+  document.getElementById('ann_image').value = '';
+  document.getElementById('ann_link').value = '';
+  document.getElementById('ann_product').value = '';
+  document.getElementById('ann_active').checked = true;
+  toggleAnnAdFields();
+  document.getElementById('annModal').style.display = 'flex';
+}
+function closeAnnModal() {
+  document.getElementById('annModal').style.display = 'none';
+}
+function toggleAnnAdFields() {
+  var cat = document.getElementById('ann_cat').value;
+  document.getElementById('annAdFields').style.display = (cat === 'ad') ? 'block' : 'none';
+}
+function editAnn(id, cat, title, body, image, link, productId, sort, active) {
+  document.getElementById('annModalTitle').textContent = 'Edit Announcement';
+  document.getElementById('ann_id').value = id;
+  document.getElementById('ann_cat').value = cat;
+  document.getElementById('ann_title').value = title;
+  document.getElementById('ann_body').value = body;
+  document.getElementById('ann_image').value = image;
+  document.getElementById('ann_link').value = link;
+  document.getElementById('ann_product').value = productId || '';
+  document.getElementById('ann_active').checked = !!active;
+  toggleAnnAdFields();
+  document.getElementById('annModal').style.display = 'flex';
+}
+function saveAnn() {
+  var id = document.getElementById('ann_id').value;
+  var data = {
+    id: id || null,
+    category: document.getElementById('ann_cat').value,
+    title: document.getElementById('ann_title').value.trim(),
+    body: document.getElementById('ann_body').value.trim(),
+    image_url: document.getElementById('ann_image').value.trim(),
+    link_url: document.getElementById('ann_link').value.trim(),
+    product_id: document.getElementById('ann_product').value || null,
+    active: document.getElementById('ann_active').checked ? 1 : 0,
+    sort_order: 0
+  };
+  if (!data.title) { alert('Title is required'); return; }
+  fetch('/admin/api/announcement/save', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  }).then(r => r.json()).then(j => {
+    if (j.ok) { closeAnnModal(); location.reload(); }
+    else { alert('Error: ' + (j.error || 'Unknown')); }
+  });
+}
+function deleteAnn(id) {
+  if (!confirm('Delete this announcement?')) return;
+  fetch('/admin/api/announcement/delete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id})
+  }).then(r => r.json()).then(j => {
+    if (j.ok) location.reload();
+    else alert('Error: ' + (j.error || 'Unknown'));
+  });
+}
+
 </script>
 </body>
 </html>
@@ -879,11 +1032,22 @@ def dashboard():
         'pending_appointments': pending_appointments,
     }
 
+    db2 = get_db()
+    announcements = db2.execute(
+        'SELECT * FROM announcements ORDER BY sort_order ASC, id DESC'
+    ).fetchall()
+    products_for_ann = db2.execute(
+        'SELECT id, name FROM products WHERE active=1 ORDER BY name'
+    ).fetchall()
+    db2.close()
+
     return render_template_string(
         ADMIN_PAGE,
         username=session.get('username'),
         stats=stats,
         activity=[dict(a) for a in activity],
+        announcements=[dict(a) for a in announcements],
+        products=[dict(p) for p in products_for_ann],
     )
 
 
@@ -1231,6 +1395,61 @@ def update_appointment():
     db.commit()
     db.close()
     return jsonify({'ok': True})
+
+# ============================================
+#   ANNOUNCEMENT ROUTES
+# ============================================
+@admin_bp.route('/api/announcement/save', methods=['POST'])
+@admin_required
+def admin_announcement_save():
+    data = request.get_json() or {}
+    db = get_db()
+    try:
+        ann_id = data.get('id')
+        if ann_id:
+            db.execute(
+                '''UPDATE announcements SET category=?,title=?,body=?,image_url=?,
+                   link_url=?,product_id=?,sort_order=?,active=? WHERE id=?''',
+                (data.get('category','regular'), data.get('title',''),
+                 data.get('body',''), data.get('image_url',''),
+                 data.get('link_url',''), data.get('product_id'),
+                 int(data.get('sort_order') or 0), int(data.get('active',1)),
+                 ann_id)
+            )
+            log_audit(db, session['user_id'], f'Announcement updated: {data.get("title")}')
+        else:
+            db.execute(
+                '''INSERT INTO announcements
+                   (category,title,body,image_url,link_url,product_id,sort_order,active)
+                   VALUES (?,?,?,?,?,?,?,?)''',
+                (data.get('category','regular'), data.get('title',''),
+                 data.get('body',''), data.get('image_url',''),
+                 data.get('link_url',''), data.get('product_id'),
+                 int(data.get('sort_order') or 0), int(data.get('active',1)))
+            )
+            log_audit(db, session['user_id'], f'Announcement created: {data.get("title")}')
+        db.commit()
+        db.close()
+        return jsonify({'ok': True})
+    except Exception as ex:
+        db.close()
+        return jsonify({'ok': False, 'error': str(ex)})
+
+
+@admin_bp.route('/api/announcement/delete', methods=['POST'])
+@admin_required
+def admin_announcement_delete():
+    data = request.get_json() or {}
+    ann_id = data.get('id')
+    if not ann_id:
+        return jsonify({'ok': False, 'error': 'No id provided'})
+    db = get_db()
+    db.execute('DELETE FROM announcements WHERE id=?', (ann_id,))
+    log_audit(db, session['user_id'], f'Announcement deleted: ID {ann_id}')
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
 
 
 # ============================================

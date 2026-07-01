@@ -379,6 +379,35 @@ def init_db():
         )
     ''')
 
+
+
+    # ---- CART ITEMS ----
+    db.execute(f'''
+        CREATE TABLE IF NOT EXISTS cart_items (
+            id          {pk},
+            user_id     INTEGER NOT NULL,
+            product_id  INTEGER NOT NULL,
+            added_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, product_id)
+        )
+    ''')
+
+    # ---- ANNOUNCEMENTS ----
+    db.execute(f'''
+        CREATE TABLE IF NOT EXISTS announcements (
+            id          {pk},
+            category    TEXT NOT NULL DEFAULT 'regular',
+            title       TEXT NOT NULL,
+            body        TEXT,
+            image_url   TEXT,
+            link_url    TEXT,
+            product_id  INTEGER,
+            active      INTEGER DEFAULT 1,
+            sort_order  INTEGER DEFAULT 0,
+            created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # ---- SETTINGS ----
     db.execute('''
         CREATE TABLE IF NOT EXISTS settings (
