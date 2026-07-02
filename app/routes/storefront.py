@@ -6,74 +6,17 @@
 
 from flask import Blueprint, render_template_string, abort, request, jsonify, session
 from app.core.database import get_db, get_setting
+from app.core.layout import NAVBAR, FOOTER, HEAD, SCRIPT_TAG
 from app.services.notifications import notify_appointment
 
 storefront_bp = Blueprint('storefront', __name__)
 
 # ============================================
-#   SHARED LAYOUT PIECES (navbar, drawer, footer)
-#   Injected into every storefront page
+#   Shared NAVBAR / FOOTER / HEAD / SCRIPT_TAG
+#   now imported from app.core.layout — single
+#   source of truth used by storefront, account,
+#   and checkout route files alike.
 # ============================================
-
-NAVBAR = '''
-<nav class="navbar">
-  <!-- Left Side: Hamburger Menu -->
-  <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
-  
-  <!-- Left-of-Center Brand Text -->
-  <a href="/" class="nav-logo-img-wrap">
-    <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
-  </a>
-
-  <!-- Right Side Slot: Brand Profile Avatar -->
-  <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
-    <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-    <span class="nav-logo-fallback">V</span>
-  </a>
-</nav>
-
-<div class="menu-overlay" id="menuOverlay"></div>
-<div class="menu-drawer" id="menuDrawer">
-  <a href="/">&#127968; Home</a>
-  <a href="/search">&#128269; Search</a>
-  <a href="/valcore">&#9889; VALCORE Profile</a>
-  <a href="/appointment">&#128197; Book Appointment</a>
-  {% if session_user %}
-  <a href="/account/downloads">&#128230; My Purchases</a>
-  <a href="/account" class="menu-cart-link">&#128722; Cart <span class="cart-badge" data-cart-count style="display:none">0</span></a>
-  <a href="/account/wishlist">&#9825; Wishlist</a>
-  <a href="/account/support">&#128172; Support Tickets</a>
-  <a href="/account/settings">&#9881; Settings</a>
-  <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
-  <a href="/account" class="menu-user-card">
-    <span class="menu-user-v">V</span>
-    <span class="menu-username">{{ session_username or "My Account" }}</span>
-  </a>
-  {% else %}
-  <a href="/login">&#128275; Sign In</a>
-  <a href="/signup">&#10133; Create Account</a>
-  {% endif %}
-</div>
-'''
-
-FOOTER = '''
-<footer class="store-footer">
-  <div class="store-footer-inner">
-    <p><span class="gold">VALCORE</span> &lt;/&gt; &middot; Digital products, templates, and automation systems.</p>
-    <p>Products not to your liking? <a href="/appointment" style="color:var(--gold)">Book an appointment</a> &rarr;</p>
-  </div>
-</footer>
-'''
-
-HEAD = '''
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/css/store.css"/>
-'''
-
-SCRIPT_TAG = '''<script src="/js/store.js"></script>'''
-
 
 
 # ============================================
@@ -83,9 +26,35 @@ SCRIPT_TAG = '''<script src="/js/store.js"></script>'''
 HOME_PAGE = '''
 <!DOCTYPE html>
 <html lang="en">
-<head><title>VALCORE — Digital Products & Templates</title>''' + HEAD + '''</head>
+<head><title>VALCORE — Digital Products & Templates</title>''' + HEAD + '''
+<style>
+.ann-banner{display:flex;align-items:center;gap:0.75rem;width:100%;padding:0.7rem 5%;font-size:0.82rem;
+  font-weight:600;text-decoration:none;border-bottom:1px solid var(--border);transition:opacity 0.2s;color:var(--text)}
+.ann-banner img{width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0}
+.ann-regular{background:rgba(59,130,246,0.08);color:#60A5FA}
+.ann-promo{background:rgba(212,175,55,0.08);color:var(--gold)}
+.ann-new_product{background:rgba(46,204,113,0.08);color:var(--green)}
+.ann-event{background:rgba(168,85,247,0.08);color:#C084FC}
+.ann-ad{background:var(--gold-soft);color:var(--gold);border:1px solid var(--border-gold)}
+a.ann-banner:hover{opacity:0.85}
+</style>
+</head>
 <body>
 ''' + NAVBAR + '''
+
+{% for ann in announcements %}
+{% if ann.category == 'ad' and ann.link_url %}
+<a href="{{ ann.link_url }}" class="ann-banner ann-ad" {{ 'target="_blank"' if ann.link_url.startswith('http') else '' }}>
+  {% if ann.image_url %}<img src="{{ ann.image_url }}" alt=""/>{% endif %}
+  <span>{% if ann.title %}<strong>{{ ann.title }}</strong> — {% endif %}{{ ann.message }} {% if ann.link_label %}&rarr; {{ ann.link_label }}{% endif %}</span>
+</a>
+{% else %}
+<div class="ann-banner ann-{{ ann.category }}">
+  {% if ann.category == 'promo' %}&#127881;{% elif ann.category == 'new_product' %}&#127381;{% elif ann.category == 'event' %}&#128197;{% else %}&#128276;{% endif %}
+  <span>{% if ann.title %}<strong>{{ ann.title }}</strong> — {% endif %}{{ ann.message }}</span>
+</div>
+{% endif %}
+{% endfor %}
 
 <div class="search-section">
   <div class="search-box">
@@ -94,36 +63,6 @@ HOME_PAGE = '''
     <button id="searchBtn" class="search-icon" style="background:none;border:none;cursor:pointer">&rarr;</button>
   </div>
 </div>
-
-
-<section class="deals-section" id="dealsSection" style="display:none">
-  <div class="hot-title" style="font-size:1.3rem;padding:1.5rem 5% 0.5rem">&#128176; Deals</div>
-  <div class="product-grid" id="dealsGrid">
-    {% for p in deals %}
-    <a href="/product/{{ p.slug }}" class="product-card">
-      <div class="product-badge promo">-{{ p.promo_percent }}%</div>
-      <div class="product-img">&#128230;</div>
-      <div class="product-info">
-        <span class="product-cat">{{ p.collection_name or 'Product' }}</span>
-        <div class="product-name">{{ p.name }}</div>
-        <div class="product-rating"><span class="stars">&#9733;</span> {{ "%.1f"|format(p.rating_avg or 0) }}</div>
-        <div class="product-price-row">
-          <span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span>
-          <span class="product-compare">&#8358;{{ "{:,}".format(p.price) }}</span>
-        </div>
-        <div class="card-action-row" style="display:flex;gap:0.4rem;margin-top:0.5rem">
-          <a href="/product/{{ p.slug }}" class="btn btn-gold" style="flex:1;font-size:0.78rem;padding:0.45rem 0;text-align:center;display:block"
-            onclick="event.stopPropagation()">Buy Now &rarr;</a>
-          <button class="btn btn-outline cart-add-btn" style="flex:0 0 38px;padding:0.45rem 0;font-size:0.85rem"
-            onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, this)" title="Add to Cart">&#128722;</button>
-        </div>
-        </div>
-        </a>
-    {% else %}
-    <div class="empty-state">No deals live yet.</div>
-    {% endfor %}
-    </div>
-  </section>
 
 <section class="hot-section">
   <div class="hot-title">&#128293; HOT</div>
@@ -140,12 +79,7 @@ HOME_PAGE = '''
           <span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span>
           {% if p.promo_percent and p.promo_percent > 0 %}<span class="product-compare">&#8358;{{ "{:,}".format(p.price) }}</span>{% endif %}
         </div>
-        <div class="card-action-row" style="display:flex;gap:0.4rem;margin-top:0.5rem">
-          <a href="/product/{{ p.slug }}" class="btn btn-gold" style="flex:1;font-size:0.78rem;padding:0.45rem 0;text-align:center;display:block"
-            onclick="event.stopPropagation()">Buy Now &rarr;</a>
-          <button class="btn btn-outline cart-add-btn" style="flex:0 0 38px;padding:0.45rem 0;font-size:0.85rem"
-            onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, this)" title="Add to Cart">&#128722;</button>
-        </div>
+        <button class="product-card-cart-btn" onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, '{{ p.name|replace("'", "") }}', {{ p.display_price }}, this)">&#128722; Add to Cart</button>
       </div>
     </a>
     {% else %}
@@ -178,6 +112,7 @@ HOME_PAGE = '''
         <div class="product-name">{{ p.name }}</div>
         <div class="product-rating"><span class="stars">&#9733;</span> {{ "%.1f"|format(p.rating_avg or 0) }} ({{ p.rating_count or 0 }})</div>
         <div class="product-price-row"><span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span></div>
+        <button class="product-card-cart-btn" onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, '{{ p.name|replace("'", "") }}', {{ p.display_price }}, this)">&#128722; Add to Cart</button>
       </div>
     </a>
     {% else %}
@@ -200,6 +135,7 @@ HOME_PAGE = '''
         <div class="product-name">{{ p.name }}</div>
         <div class="product-rating"><span class="stars">&#9733;</span> {{ "%.1f"|format(p.rating_avg or 0) }} ({{ p.rating_count or 0 }})</div>
         <div class="product-price-row"><span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span></div>
+        <button class="product-card-cart-btn" onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, '{{ p.name|replace("'", "") }}', {{ p.display_price }}, this)">&#128722; Add to Cart</button>
       </div>
     </a>
     {% else %}
@@ -221,21 +157,13 @@ HOME_PAGE = '''
         <div class="product-name">{{ p.name }}</div>
         <div class="product-rating"><span class="stars">&#9733;</span> {{ "%.1f"|format(p.rating_avg or 0) }} ({{ p.rating_count or 0 }})</div>
         <div class="product-price-row"><span class="product-price">&#8358;{{ "{:,}".format(p.display_price) }}</span></div>
+        <button class="product-card-cart-btn" onclick="event.preventDefault();event.stopPropagation();addToCart({{ p.id }}, '{{ p.name|replace("'", "") }}', {{ p.display_price }}, this)">&#128722; Add to Cart</button>
       </div>
     </a>
     {% else %}
     <div class="empty-state">No products live yet. Add some from /admin → Products.</div>
     {% endfor %}
   </div>
-</section>
-
-
-<section class="store-section" id="recentlyViewedSection" style="display:none;padding-top:0">
-  <div class="section-title-row">
-    <span class="section-title">&#128336; Recently Viewed</span>
-    <button onclick="clearRecentlyViewed()" style="background:none;border:none;color:var(--muted);font-size:0.75rem;cursor:pointer">Clear</button>
-  </div>
-  <div class="product-grid wide" id="recentlyViewedGrid"></div>
 </section>
 
 <div class="appt-cta">
@@ -281,19 +209,12 @@ def home():
         base_query + " ORDER BY p.id DESC LIMIT 20"
     ).fetchall()
 
-    deals_rows = db.execute(
-        base_query + " AND p.promo_percent > 0 ORDER BY p.promo_percent DESC LIMIT 8"
-    ).fetchall()
-
-    # Fetch active announcements with product slug if linked
-    announcements = db.execute("""
-        SELECT a.*, p.slug as product_slug
-        FROM announcements a
-        LEFT JOIN products p ON p.id = a.product_id
-        WHERE a.active = 1
-        ORDER BY a.sort_order ASC, a.id DESC
-        LIMIT 10
-    """).fetchall()
+    try:
+        announcements = db.execute(
+            "SELECT * FROM announcements WHERE active=1 ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+    except Exception:
+        announcements = []
 
     db.close()
 
@@ -316,8 +237,7 @@ def home():
         recommended=with_display_price(recommended_rows),
         new_releases=with_display_price(new_rows),
         all_products=with_display_price(all_rows),
-        deals=with_display_price(deals_rows),
-        announcements=announcements,
+        announcements=[dict(a) for a in announcements],
     )
 
 
@@ -328,16 +248,60 @@ def home():
 PRODUCT_PAGE = '''
 <!DOCTYPE html>
 <html lang="en">
-<head><title>{{ product.name }} — VALCORE</title>''' + HEAD + '''</head>
+<head><title>{{ product.name }} — VALCORE</title>''' + HEAD + '''
+<style>
+.pp-gallery-wrap{position:relative;margin-bottom:1.5rem}
+.pp-gallery-main{background:var(--card);border:1px solid var(--border);border-radius:16px;
+  height:240px;display:flex;align-items:center;justify-content:center;font-size:3rem;overflow:hidden}
+.pp-gallery-main img{width:100%;height:100%;object-fit:cover;border-radius:16px}
+.pp-gallery-thumbs{display:flex;gap:0.5rem;margin-top:0.6rem;overflow-x:auto;scrollbar-width:none}
+.pp-gallery-thumbs::-webkit-scrollbar{display:none}
+.pp-thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;cursor:pointer;
+  border:2px solid transparent;flex-shrink:0;background:var(--card)}
+.pp-thumb.active{border-color:var(--gold)}
+.pp-version-badge{display:inline-flex;align-items:center;gap:0.35rem;background:var(--gold-soft);
+  border:1px solid var(--border-gold);border-radius:50px;padding:0.2rem 0.65rem;
+  font-size:0.65rem;font-weight:700;color:var(--gold);margin-left:0.5rem}
+.pp-support-tag{display:inline-flex;align-items:center;gap:0.35rem;background:rgba(46,204,113,0.08);
+  border:1px solid rgba(46,204,113,0.2);border-radius:50px;padding:0.2rem 0.65rem;
+  font-size:0.65rem;font-weight:700;color:var(--green);margin-left:0.35rem}
+.pp-included{background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:1rem 1.25rem;margin-bottom:1.25rem}
+.pp-included-title{font-size:0.82rem;font-weight:700;margin-bottom:0.75rem;color:var(--text)}
+.pp-included-item{display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;
+  color:var(--muted);padding:0.25rem 0}
+.pp-included-item::before{content:"✓";color:var(--green);font-weight:700;flex-shrink:0}
+</style>
+</head>
 <body>
 ''' + NAVBAR + '''
 
 <div class="product-page">
-  <div class="pp-gallery">&#128230;</div>
+
+  <div class="pp-gallery-wrap">
+    <div class="pp-gallery-main" id="galleryMain">
+      {% if images %}
+      <img src="{{ images[0].image_url }}" id="galleryMainImg" alt="{{ product.name }}"/>
+      {% else %}
+      <span>&#128230;</span>
+      {% endif %}
+    </div>
+    {% if images|length > 1 %}
+    <div class="pp-gallery-thumbs">
+      {% for img in images %}
+      <img src="{{ img.image_url }}" class="pp-thumb {{ 'active' if loop.first }}"
+           onclick="switchGallery(this, '{{ img.image_url }}')" alt=""/>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
 
   <div class="pp-meta">
     <span class="pp-cat">{{ product.collection_name or "Product" }}</span>
-    <span class="pp-views">&#128065; {{ product.views }} views</span>
+    <span class="pp-version-badge">v{{ product.version or "1.0" }}</span>
+    {% if product.support_duration %}
+    <span class="pp-support-tag">&#128241; {{ product.support_duration }} support</span>
+    {% endif %}
   </div>
 
   <h1 class="pp-name">{{ product.name }}</h1>
@@ -357,12 +321,24 @@ PRODUCT_PAGE = '''
 
   <p class="pp-desc">{{ product.description or product.short_desc or "No description yet." }}</p>
 
+  {% if product.what_included %}
+  <div class="pp-included">
+    <div class="pp-included-title">&#128230; What's Included</div>
+    {% for item in product.what_included.split(',') %}
+    <div class="pp-included-item">{{ item.strip() }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <div class="pp-actions">
     <button onclick="startCheckout({{ product.id }})" class="btn btn-gold" style="flex:1;text-align:center;border:none;cursor:pointer" id="purchaseBtn">Purchase &rarr;</button>
-    <button onclick="addToCart({{ product.id }}, this)" class="btn btn-outline" style="flex:1;text-align:center;border:1.5px solid var(--gold);cursor:pointer" id="addToCartBtn">&#128722; Add to Cart</button>
+    <button onclick="addToCart({{ product.id }}, '{{ product.name|replace("'", "") }}', {{ display_price }}, this)" class="btn btn-outline" id="cartBtn">&#128722; Add to Cart</button>
+    {% if product.live_url %}
+    <a href="{{ product.live_url }}" target="_blank" class="btn btn-outline">&#128279; View Live</a>
+    {% endif %}
     <button class="pp-wishlist-btn" onclick="toggleWishlist({{ product.id }}, this)">&#9825;</button>
     {% if session_admin %}
-    <a href="/admin#products" class="btn btn-outline">&#9998; Edit</a>
+    <a href="/admin" class="btn btn-outline">&#9998; Edit</a>
     {% endif %}
   </div>
 
@@ -450,6 +426,13 @@ PRODUCT_PAGE = '''
 
 ''' + FOOTER + SCRIPT_TAG + '''
 <script>
+function switchGallery(thumb, url) {
+  var main = document.getElementById('galleryMainImg');
+  if (main) main.src = url;
+  document.querySelectorAll('.pp-thumb').forEach(function(t) { t.classList.remove('active'); });
+  thumb.classList.add('active');
+}
+
 function startCheckout(productId) {
   var btn = document.getElementById('purchaseBtn');
   {% if session_user %}
@@ -612,6 +595,11 @@ def product_page(slug):
         LIMIT 4
     ''', (product['collection_id'], product['id'])).fetchall()
 
+    images = db.execute(
+        'SELECT * FROM product_images WHERE product_id=? ORDER BY sort_order',
+        (product['id'],)
+    ).fetchall()
+
     reviews = db.execute('''
         SELECT r.*, u.username
         FROM reviews r
@@ -638,6 +626,7 @@ def product_page(slug):
         PRODUCT_PAGE,
         product=product_dict,
         display_price=display_price,
+        images=[dict(i) for i in images],
         related=[dict(r) for r in related],
         reviews=[dict(r) for r in reviews],
         questions=[dict(q) for q in questions],
@@ -1085,3 +1074,127 @@ def book_appointment():
     notify_appointment(name, data.get('project_type', ''))
 
     return jsonify({'ok': True})
+
+
+# ============================================
+#   CART PAGE
+# ============================================
+
+CART_PAGE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Cart — VALCORE</title>''' + HEAD + '''</head>
+<body>
+''' + NAVBAR + '''
+
+<div class="product-page" style="max-width:520px">
+  <h1 class="pp-name">&#128722; My Cart</h1>
+
+  <div id="cartItemsWrap">
+    <p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:2rem 0">Loading cart...</p>
+  </div>
+
+  <div id="cartTotalWrap" style="display:none;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:700;margin-bottom:1rem">
+      <span>Total</span>
+      <span class="gold" id="cartTotalAmount">&#8358;0</span>
+    </div>
+    <button id="cartCheckoutBtn" class="btn btn-gold" style="width:100%;text-align:center;border:none;cursor:pointer" onclick="startCartCheckout()">Checkout &rarr;</button>
+    <p id="cartCheckoutNote" style="font-size:0.78rem;text-align:center;margin-top:0.6rem"></p>
+  </div>
+</div>
+
+''' + FOOTER + SCRIPT_TAG + '''
+<script>
+(function() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/cart/items', true);
+  xhr.withCredentials = true;
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      try {
+        var res = JSON.parse(xhr.responseText);
+        var wrap = document.getElementById('cartItemsWrap');
+        if (!res.items || !res.items.length) {
+          wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:2rem 0">Your cart is empty. <a href="/" style="color:var(--gold)">Browse products</a></p>';
+          return;
+        }
+        wrap.innerHTML = res.items.map(function(item) {
+          return '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.85rem 1rem;margin-bottom:0.6rem">' +
+            '<div><strong style="font-size:0.85rem">' + item.name + '</strong><br><span style="font-size:0.72rem;color:var(--muted)">Qty: ' + item.qty + '</span></div>' +
+            '<div style="display:flex;align-items:center;gap:0.75rem">' +
+            '<span style="color:var(--gold);font-weight:700">₦' + (item.price * item.qty).toLocaleString() + '</span>' +
+            '<button class="cart-remove-btn" data-pid="' + item.product_id + '" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem">&times;</button>' +
+            '</div></div>';
+        }).join('');
+        document.getElementById('cartTotalWrap').style.display = 'block';
+        document.getElementById('cartTotalAmount').textContent = '₦' + res.total.toLocaleString();
+        updateCartCount(res.count);
+
+        document.querySelectorAll('.cart-remove-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            removeFromCart(btn.getAttribute('data-pid'));
+          });
+        });
+      } catch(e) {}
+    }
+  };
+  xhr.send();
+})();
+
+function removeFromCart(productId) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/cart/remove', true);
+  xhr.withCredentials = true;
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) { window.location.reload(); }
+  };
+  xhr.send(JSON.stringify({ product_id: productId }));
+}
+
+function startCartCheckout() {
+  var btn = document.getElementById('cartCheckoutBtn');
+  var note = document.getElementById('cartCheckoutNote');
+  btn.textContent = 'Starting checkout...';
+  btn.disabled = true;
+  note.textContent = '';
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/checkout/cart', true);
+  xhr.withCredentials = true;
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      btn.disabled = false;
+      try {
+        var res = JSON.parse(xhr.responseText);
+        if (res.ok && res.authorization_url) {
+          window.location.href = res.authorization_url;
+        } else {
+          btn.textContent = 'Checkout →';
+          note.textContent = res.error || 'Could not start checkout.';
+          note.style.color = 'var(--red)';
+        }
+      } catch(e) {
+        btn.textContent = 'Checkout →';
+        note.textContent = 'Something went wrong. Try again.';
+        note.style.color = 'var(--red)';
+      }
+    }
+  };
+  xhr.send(JSON.stringify({}));
+}
+</script>
+</body>
+</html>
+'''
+
+
+@storefront_bp.route('/cart')
+def cart_page():
+    return render_template_string(
+        CART_PAGE,
+        session_user=session.get('user_id'),
+        session_username=session.get('username', ''),
+    )

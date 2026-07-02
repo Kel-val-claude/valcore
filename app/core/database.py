@@ -303,6 +303,17 @@ def init_db():
         )
     ''')
 
+    # ---- CART ITEMS (account-persisted, not just session) ----
+    db.execute(f'''
+        CREATE TABLE IF NOT EXISTS cart_items (
+            id         {pk},
+            user_id    INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            qty        INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # ---- SUPPORT TICKETS ----
     db.execute(f'''
         CREATE TABLE IF NOT EXISTS support_tickets (
@@ -379,35 +390,6 @@ def init_db():
         )
     ''')
 
-
-
-    # ---- CART ITEMS ----
-    db.execute(f'''
-        CREATE TABLE IF NOT EXISTS cart_items (
-            id          {pk},
-            user_id     INTEGER NOT NULL,
-            product_id  INTEGER NOT NULL,
-            added_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, product_id)
-        )
-    ''')
-
-    # ---- ANNOUNCEMENTS ----
-    db.execute(f'''
-        CREATE TABLE IF NOT EXISTS announcements (
-            id          {pk},
-            category    TEXT NOT NULL DEFAULT 'regular',
-            title       TEXT NOT NULL,
-            body        TEXT,
-            image_url   TEXT,
-            link_url    TEXT,
-            product_id  INTEGER,
-            active      INTEGER DEFAULT 1,
-            sort_order  INTEGER DEFAULT 0,
-            created_at  TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
     # ---- SETTINGS ----
     db.execute('''
         CREATE TABLE IF NOT EXISTS settings (
@@ -424,6 +406,43 @@ def init_db():
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # ---- ANNOUNCEMENTS ----
+    db.execute(f'''
+        CREATE TABLE IF NOT EXISTS announcements (
+            id         {pk},
+            title      TEXT,
+            message    TEXT NOT NULL,
+            category   TEXT DEFAULT 'regular',
+            image_url  TEXT,
+            link_url   TEXT,
+            link_label TEXT,
+            active     INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # ---- RECENTLY VIEWED ----
+    db.execute(f'''
+        CREATE TABLE IF NOT EXISTS recently_viewed (
+            id         {pk},
+            user_id    INTEGER,
+            session_id TEXT,
+            product_id INTEGER NOT NULL,
+            viewed_at  TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # ---- ADD NEW PRODUCT COLUMNS (safe for existing DBs) ----
+    for col, definition in [
+        ('live_url', 'TEXT'),
+        ('what_included', 'TEXT'),
+        ('support_duration', 'TEXT'),
+    ]:
+        try:
+            db.execute(f'ALTER TABLE products ADD COLUMN {col} {definition}')
+        except Exception:
+            pass  # Column already exists
 
     seed_settings = [
         ('site_name',           'VALCORE'),

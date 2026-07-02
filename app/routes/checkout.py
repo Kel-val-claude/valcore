@@ -16,8 +16,9 @@ import json
 from flask import Blueprint, request, redirect, session, jsonify, render_template_string, abort, send_file
 from app.core.database import get_db
 from app.core.auth import login_required, log_activity
+from app.core.layout import NAVBAR, FOOTER, HEAD, SCRIPT_TAG
 from app.services.payments import initialize_transaction, verify_transaction, verify_webhook_signature, is_paystack_configured
-from app.services.licensing import generate_license_key, generate_download_token, make_payment_reference, make_cart_payment_reference
+from app.services.licensing import generate_license_key, generate_download_token, make_payment_reference
 from app.services.notifications import notify_purchase
 
 checkout_bp = Blueprint('checkout', __name__)
@@ -79,25 +80,20 @@ def start_checkout(product_id):
 
 
 # ============================================
-#   START CART CHECKOUT — multi-item
-#   Creates one purchase row per cart item, all
-#   sharing ONE payment_ref. Single Paystack charge
-#   for the summed total. Callback/webhook handle
-#   N rows sharing that reference.
+#   CART CHECKOUT — multiple products, one Paystack charge
 # ============================================
 
-@checkout_bp.route('/checkout/start-cart', methods=['POST'])
+@checkout_bp.route('/checkout/cart', methods=['POST'])
 @login_required
 def start_cart_checkout():
     db = get_db()
-    user_id = session['user_id']
 
     cart_rows = db.execute('''
-        SELECT ci.product_id, p.name, p.price, p.promo_percent
+        SELECT ci.product_id, ci.qty, p.name, p.price, p.promo_percent, p.status, p.deleted_at
         FROM cart_items ci
-        JOIN products p ON p.id = ci.product_id
-        WHERE ci.user_id=? AND p.status='live' AND p.deleted_at IS NULL
-    ''', (user_id,)).fetchall()
+        JOIN products p ON ci.product_id = p.id
+        WHERE ci.user_id=?
+    ''', (session['user_id'],)).fetchall()
 
     if not cart_rows:
         db.close()
@@ -107,25 +103,39 @@ def start_cart_checkout():
         db.close()
         return jsonify({'ok': False, 'error': 'Payments not configured yet. Check back soon, or book an appointment instead.'}), 503
 
-    user = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
 
-    reference = make_cart_payment_reference(user_id)
+    # Re-validate every cart item against the DB — never trust stale prices.
+    # A product could've changed price/promo/status since it was added to cart.
+    valid_items = []
     total = 0
-    product_names = []
-
     for row in cart_rows:
+        if row['status'] != 'live' or row['deleted_at']:
+            continue  # Skip items that got deleted/hidden since being added
+
         price = row['price'] or 0
         promo = row['promo_percent'] or 0
-        final_price = round(price - (price * promo / 100)) if promo > 0 else price
-        total += final_price
-        product_names.append(row['name'])
+        real_price = round(price - (price * promo / 100)) if promo > 0 else price
+        qty = row['qty']
 
-        # One purchase row per cart item, all sharing the same payment_ref
-        db.execute('''
-            INSERT INTO purchases (user_id, product_id, price_paid, payment_ref, status)
-            VALUES (?,?,?,?,'pending')
-        ''', (user_id, row['product_id'], final_price, reference))
+        valid_items.append({'product_id': row['product_id'], 'name': row['name'], 'price': real_price, 'qty': qty})
+        total += real_price * qty
 
+    if not valid_items:
+        db.close()
+        return jsonify({'ok': False, 'error': 'No valid items in cart — they may have been removed.'}), 400
+
+    # One shared reference for the whole cart, used by every purchase row
+    reference = make_payment_reference(session['user_id'], 0) + '-cart'
+
+    # Create one pending purchase row PER UNIT (so qty=2 of a product makes 2 rows,
+    # each gets its own license key once payment confirms)
+    for item in valid_items:
+        for _ in range(item['qty']):
+            db.execute('''
+                INSERT INTO purchases (user_id, product_id, price_paid, payment_ref, status)
+                VALUES (?,?,?,?,'pending')
+            ''', (session['user_id'], item['product_id'], item['price'], reference))
     db.commit()
 
     callback_url = request.host_url.rstrip('/') + '/checkout/callback'
@@ -135,7 +145,11 @@ def start_cart_checkout():
         amount_naira=total,
         reference=reference,
         callback_url=callback_url,
-        metadata={'user_id': user_id, 'cart': True, 'product_names': product_names},
+        metadata={
+            'user_id': session['user_id'],
+            'cart_items': [i['product_id'] for i in valid_items],
+            'is_cart_checkout': True,
+        },
     )
 
     db.close()
@@ -159,15 +173,14 @@ CALLBACK_PAGE = '''
   <style>
     body{background:#0A0A0A;color:#F0F0F0;font-family:Inter,sans-serif;display:flex;align-items:center;
       justify-content:center;min-height:100vh;text-align:center;padding:1.5rem}
-    .box{max-width:420px}
+    .box{max-width:380px}
     .icon{font-size:3rem;margin-bottom:1rem}
     h1{font-size:1.3rem;margin-bottom:0.5rem}
     p{color:#888;font-size:0.88rem;margin-bottom:1.5rem;line-height:1.6}
-    .license{background:#141414;border:1px solid rgba(212,175,55,0.2);border-radius:10px;padding:0.85rem 1rem;
-      font-family:monospace;color:#D4AF37;font-size:0.85rem;margin-bottom:0.6rem;word-break:break-all;text-align:left}
-    .license small{display:block;color:#666;font-family:Inter,sans-serif;font-size:0.68rem;margin-bottom:0.3rem}
+    .license{background:#141414;border:1px solid rgba(212,175,55,0.2);border-radius:10px;padding:1rem;
+      font-family:monospace;color:#D4AF37;font-size:0.9rem;margin-bottom:1.5rem;word-break:break-all}
     .btn{display:inline-block;background:#D4AF37;color:#0A0A0A;padding:0.75rem 1.5rem;border-radius:8px;
-      text-decoration:none;font-weight:700;font-size:0.85rem;margin-top:0.5rem}
+      text-decoration:none;font-weight:700;font-size:0.85rem}
   </style>
 </head>
 <body>
@@ -175,13 +188,8 @@ CALLBACK_PAGE = '''
     <div class="icon">{{ "✅" if success else "⚠️" }}</div>
     <h1>{{ "Payment Successful!" if success else "Payment Not Confirmed" }}</h1>
     <p>{{ message }}</p>
-    {% if license_keys %}
-      {% for lk in license_keys %}
-      <div class="license">
-        <small>{{ lk.product_name }}</small>
-        {{ lk.key }}
-      </div>
-      {% endfor %}
+    {% if license_key %}
+    <div class="license">{{ license_key }}</div>
     {% endif %}
     <a href="{{ '/account/downloads' if success else '/' }}" class="btn">{{ "Go to My Downloads" if success else "Back to Store" }}</a>
   </div>
@@ -195,23 +203,22 @@ def checkout_callback():
     reference = request.args.get('reference') or request.args.get('trxref')
 
     if not reference:
-        return render_template_string(CALLBACK_PAGE, success=False, message='No payment reference found.', license_keys=None)
+        return render_template_string(CALLBACK_PAGE, success=False, message='No payment reference found.', license_key=None)
 
     db = get_db()
     purchases = db.execute('SELECT * FROM purchases WHERE payment_ref=?', (reference,)).fetchall()
 
     if not purchases:
         db.close()
-        return render_template_string(CALLBACK_PAGE, success=False, message='Purchase record not found.', license_keys=None)
+        return render_template_string(CALLBACK_PAGE, success=False, message='Purchase record not found.', license_key=None)
 
     # Already processed (e.g. webhook beat us to it, or double callback)
-    if all(p['status'] == 'completed' for p in purchases):
-        existing_keys = []
-        for p in purchases:
-            prod = db.execute('SELECT name FROM products WHERE id=?', (p['product_id'],)).fetchone()
-            existing_keys.append({'product_name': prod['name'] if prod else 'Product', 'key': p['license_key']})
+    if purchases[0]['status'] == 'completed':
         db.close()
-        return render_template_string(CALLBACK_PAGE, success=True, message='Payment already confirmed. Your download is ready.', license_keys=existing_keys)
+        first_key = purchases[0]['license_key']
+        msg = 'Payment already confirmed. Your download is ready.' if len(purchases) == 1 \
+              else f'Payment already confirmed for {len(purchases)} items. Your downloads are ready.'
+        return render_template_string(CALLBACK_PAGE, success=True, message=msg, license_key=first_key)
 
     # VERIFY server-side — never trust the redirect alone
     result = verify_transaction(reference)
@@ -220,22 +227,23 @@ def checkout_callback():
         db.execute("UPDATE purchases SET status='failed' WHERE payment_ref=?", (reference,))
         db.commit()
         db.close()
-        return render_template_string(CALLBACK_PAGE, success=False, message='Payment was not successful. No charge was made to your downloads.', license_keys=None)
+        return render_template_string(CALLBACK_PAGE, success=False, message='Payment was not successful. No charge was made to your downloads.', license_key=None)
 
-    # Double-check amount matches what we expected (anti-fraud)
-    # Sums across ALL purchase rows sharing this reference — covers both
-    # single-product checkout (1 row) and cart checkout (N rows).
+    # Double-check amount matches what we expected (anti-fraud) — sum ALL rows for this reference
     expected_kobo = sum(p['price_paid'] for p in purchases) * 100
     if result['amount'] != expected_kobo:
         db.execute("UPDATE purchases SET status='flagged' WHERE payment_ref=?", (reference,))
         db.commit()
         db.close()
-        return render_template_string(CALLBACK_PAGE, success=False, message='Payment amount mismatch. Please contact support.', license_keys=None)
+        return render_template_string(CALLBACK_PAGE, success=False, message='Payment amount mismatch. Please contact support.', license_key=None)
 
-    # All good — finalize every purchase row tied to this reference
-    license_keys = []
+    # All good — finalize EVERY purchase row tied to this reference (1 for single-product, N for cart)
+    first_license_key = None
+    product_names = []
     for purchase in purchases:
         license_key = generate_license_key()
+        if first_license_key is None:
+            first_license_key = license_key
         token, expires_at = generate_download_token(purchase['id'])
 
         db.execute('''
@@ -246,29 +254,33 @@ def checkout_callback():
         db.execute('UPDATE products SET purchase_count = purchase_count + 1 WHERE id=?', (purchase['product_id'],))
 
         product = db.execute('SELECT name FROM products WHERE id=?', (purchase['product_id'],)).fetchone()
-        product_name = product['name'] if product else 'product'
-        log_activity(db, 'purchase', purchase['id'], f'New purchase: {product_name}')
+        pname = product['name'] if product else 'product'
+        product_names.append(pname)
+        log_activity(db, 'purchase', purchase['id'], f'New purchase: {pname}')
 
-        license_keys.append({'product_name': product_name, 'key': license_key})
-
-        notify_purchase(
-            product_name=product_name,
-            customer_email=result.get('email', 'unknown'),
-            amount_naira=purchase['price_paid'],
-        )
-
-    # If this was a cart checkout, clear the cart now that payment is confirmed
-    user_id = purchases[0]['user_id']
-    if 'CART' in reference:
-        db.execute('DELETE FROM cart_items WHERE user_id=?', (user_id,))
+    # Clear the account's cart now that checkout succeeded
+    # (only relevant for cart-based purchases — single-product purchases never touched the cart)
+    if session.get('user_id'):
+        db.execute('DELETE FROM cart_items WHERE user_id=?', (session['user_id'],))
 
     db.commit()
     db.close()
 
+    # Discord notification — fails silently if not configured, never blocks the purchase
+    total_paid = sum(p['price_paid'] for p in purchases)
+    notify_purchase(
+        product_name=', '.join(product_names) if len(product_names) <= 3 else f'{len(product_names)} items',
+        customer_email=result.get('email', 'unknown'),
+        amount_naira=total_paid,
+    )
+
+    success_msg = 'Your purchase is confirmed. Save your license key below and head to your downloads.' if len(purchases) == 1 \
+                  else f'Your purchase of {len(purchases)} items is confirmed. Each has its own license key — head to your downloads to see them all.'
+
     return render_template_string(
         CALLBACK_PAGE, success=True,
-        message='Your purchase is confirmed. Save your license key(s) below and head to your downloads.',
-        license_keys=license_keys
+        message=success_msg,
+        license_key=first_license_key
     )
 
 
@@ -294,10 +306,10 @@ def paystack_webhook():
         db = get_db()
         purchases = db.execute('SELECT * FROM purchases WHERE payment_ref=?', (reference,)).fetchall()
 
-        pending = [p for p in purchases if p['status'] != 'completed']
-
-        if pending:
-            for purchase in pending:
+        if purchases and purchases[0]['status'] != 'completed':
+            product_names = []
+            total_paid = 0
+            for purchase in purchases:
                 license_key = generate_license_key()
                 token, expires_at = generate_download_token(purchase['id'])
 
@@ -308,26 +320,22 @@ def paystack_webhook():
                 db.execute('UPDATE products SET purchase_count = purchase_count + 1 WHERE id=?', (purchase['product_id'],))
 
                 product = db.execute('SELECT name FROM products WHERE id=?', (purchase['product_id'],)).fetchone()
-                product_name = product['name'] if product else 'product'
-                log_activity(db, 'purchase', purchase['id'], f'New purchase (webhook): {product_name}')
+                pname = product['name'] if product else 'product'
+                product_names.append(pname)
+                total_paid += purchase['price_paid']
+                log_activity(db, 'purchase', purchase['id'], f'New purchase (webhook): {pname}')
 
-                notify_purchase(
-                    product_name=product_name,
-                    customer_email=data.get('customer', {}).get('email', 'unknown'),
-                    amount_naira=purchase['price_paid'],
-                )
-
-            # Clear cart on confirmed cart checkout (covers the case where
-            # the browser closed before /checkout/callback ever fired)
-            if purchases and 'CART' in (reference or ''):
-                db.execute('DELETE FROM cart_items WHERE user_id=?', (purchases[0]['user_id'],))
+            notify_purchase(
+                product_name=', '.join(product_names) if len(product_names) <= 3 else f'{len(product_names)} items',
+                customer_email=data.get('customer', {}).get('email', 'unknown'),
+                amount_naira=total_paid,
+            )
 
             db.commit()
 
         db.close()
 
     return jsonify({'ok': True})
-
 
 
 # ============================================
@@ -339,67 +347,26 @@ DOWNLOADS_PAGE = '''
 <html>
 <head>
   <title>My Downloads — VALCORE</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/css/store.css">
+''' + HEAD + '''
 </head>
 <body>
-  <nav class="navbar">
-    <button class="nav-menu-btn" id="menuBtn">&#9776;</button>
-    <a href="/" class="nav-logo-img-wrap">
-      <span class="nav-logo">VALCORE <span>&lt;/&gt;</span></span>
-    </a>
-    <a href="/valcore" class="nav-valcore-logo" title="VALCORE">
-      <img src="/assets/logo.png" alt="VALCORE" class="nav-logo-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" />
-      <span class="nav-logo-fallback">V</span>
-    </a>
-  </nav>
-  <div class="menu-overlay" id="menuOverlay"></div>
-  <div class="menu-drawer" id="menuDrawer">
-    <a href="/">&#127968; Home</a>
-    <a href="/search">&#128269; Search</a>
-    <a href="/valcore">&#9889; VALCORE Profile</a>
-    <a href="/account">&#128100; My Account</a>
-    <a href="/account/downloads">&#128230; My Purchases</a>
-    <a href="/account/wishlist">&#9825; Wishlist</a>
-    <a href="/account/support">&#128172; Support</a>
-    <a href="/logout" style="color:#E74C3C">&#9211; Logout</a>
-  </div>
-  <script>
-  document.addEventListener(\'DOMContentLoaded\', function(){
-    var btn=document.getElementById(\'menuBtn\');
-    var drawer=document.getElementById(\'menuDrawer\');
-    var overlay=document.getElementById(\'menuOverlay\');
-    if(btn&&drawer&&overlay){
-      btn.addEventListener(\'click\',function(){drawer.classList.toggle(\'open\');overlay.classList.toggle(\'open\');});
-      overlay.addEventListener(\'click\',function(){drawer.classList.remove(\'open\');overlay.classList.remove(\'open\');});
-    }
-  });
-  </script>
+''' + NAVBAR + '''
 
-  <section class="store-section">
-  <div class="section-title-row">
-    <span class="section-title">&#128230; My Downloads</span>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:0.85rem">
-  {% for p in purchases %}
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.25rem">
-    <div style="font-size:0.92rem;font-weight:700;margin-bottom:0.3rem">{{ p.product_name }}</div>
-    <div style="font-family:monospace;color:var(--gold);font-size:0.75rem;margin-bottom:0.85rem;opacity:0.8">
-      License: {{ p.license_key }}
+  <div class="product-page" style="max-width:600px">
+    <h1 class="pp-name">My <span class="gold">Downloads</span></h1>
+    {% for p in purchases %}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem">
+      <h3 style="font-size:0.95rem;margin-bottom:0.4rem">{{ p.product_name }}</h3>
+      <div style="font-family:monospace;color:var(--gold);font-size:0.78rem;margin-bottom:0.75rem">License: {{ p.license_key }}</div>
+      <a href="/account/download/{{ p.id }}" class="btn btn-gold" style="margin-right:0.5rem">Download &darr;</a>
+      {% if p.github_repo_url %}<a href="{{ p.github_repo_url }}" target="_blank" class="btn btn-outline">GitHub Repo</a>{% endif %}
     </div>
-    <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
-      <a href="/account/download/{{ p.id }}" class="btn btn-gold" style="font-size:0.8rem;padding:0.5rem 1.1rem">Download &#8595;</a>
-      {% if p.github_repo_url %}
-      <a href="{{ p.github_repo_url }}" target="_blank" class="btn btn-outline" style="font-size:0.8rem;padding:0.5rem 1.1rem">&#128025; GitHub</a>
-      {% endif %}
-    </div>
+    {% else %}
+    <p style="color:var(--muted);font-size:0.85rem">No purchases yet. Browse the <a href="/" style="color:var(--gold)">store</a>.</p>
+    {% endfor %}
   </div>
-  {% else %}
-  <div class="empty-state" style="padding:3rem 0">No purchases yet. <a href="/" style="color:var(--gold)">Browse the store</a></div>
-  {% endfor %}
-  </div>
-  </section>
+
+''' + FOOTER + SCRIPT_TAG + '''
 </body>
 </html>
 '''
@@ -418,7 +385,10 @@ def my_downloads():
     ''', (session['user_id'],)).fetchall()
     db.close()
 
-    return render_template_string(DOWNLOADS_PAGE, purchases=[dict(r) for r in rows])
+    return render_template_string(
+        DOWNLOADS_PAGE, purchases=[dict(r) for r in rows],
+        session_user=session.get('user_id'), session_username=session.get('username', ''),
+    )
 
 
 @checkout_bp.route('/account/download/<int:purchase_id>')
